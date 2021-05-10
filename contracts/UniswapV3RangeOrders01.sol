@@ -18,8 +18,6 @@ import "../uniswap-v3-core-contracts/libraries/FullMath.sol";
 
 import "./interfaces/IUniswapV3RangeOrders.sol";
 
-import "hardhat/console.sol";
-
 /**
  * @dev Allows pooled ownership in Uniswap V3 "Range Order" positions, and public resolution of
  * positions for a reward.

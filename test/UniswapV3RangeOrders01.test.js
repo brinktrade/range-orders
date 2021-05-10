@@ -365,13 +365,13 @@ async function setupOrders (opts = {}) {
   this.totalInputAmount = BN(3).mul(BN18)
   this.inputAmounts = [BN(1).mul(BN18), BN(2).mul(BN18)]
 
-  this.positionHash = soliditySha3(abiCoder.encode(
-    ['address', 'address', 'uint24', 'int24', 'int24'],
-    [this.weth.address, this.AAA.address, FeeAmount.MEDIUM, this.rangeTickLower, this.rangeTickUpper]
-  ))
-
   this.tokenIn = tokenIn || this.weth
   this.tokenOut = tokenOut || this.AAA
+
+  this.positionHash = soliditySha3(abiCoder.encode(
+    ['address', 'address', 'uint24', 'int24', 'int24'],
+    [this.tokenIn.address, this.tokenOut.address, FeeAmount.MEDIUM, this.rangeTickLower, this.rangeTickUpper]
+  ))
 
   if (this.tokenIn.address !== this.weth.address) {
     // approve and multicall if tokenIn is ERC20
