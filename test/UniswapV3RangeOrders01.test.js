@@ -21,7 +21,7 @@ const aaaAmt = bn_3b
 const DEFAULT_TICK_SPACING = 60
 const DEFAULT_NEXT_TICK = 80040
 
-describe('UniV3RangeOrderPool', function () {
+describe('UniswapV3RangeOrders01', function () {
   before(async function () {
     const UniswapV3Pool = await ethers.getContractFactory('UniswapV3Pool')
     console.log('POOL_INIT_CODE_HASH for PoolAddress.sol: ', soliditySha3(UniswapV3Pool.bytecode))
@@ -50,15 +50,15 @@ describe('UniV3RangeOrderPool', function () {
       console.log(`owner2: ${owner2.address}`)
       console.log(`WETH-AAA-MEDIUM Pool: ${this.pools.WETH.AAA.MEDIUM.address}`)
       console.log(`nftPositionManager: ${this.nftPositionManager.address}`)
-      console.log(`rangeOrderPool: ${this.rangeOrderPool.address}`)
+      console.log(`rangeOrderPool: ${this.uniswapV3RangeOrders.address}`)
       console.log()
       this.logInfo = false
     }
 
-    const RangeOrderPool01 = await ethers.getContractFactory('RangeOrderPool01')
-    this.rangeOrderPool_owner1 = await RangeOrderPool01.attach(this.rangeOrderPool.address).connect(this.owner1)
-    this.rangeOrderPool_owner2 = await RangeOrderPool01.attach(this.rangeOrderPool.address).connect(this.owner2)
-    this.rangeOrderPool_resolver = await RangeOrderPool01.attach(this.rangeOrderPool.address).connect(this.resolver)
+    const UniswapV3RangeOrders01 = await ethers.getContractFactory('UniswapV3RangeOrders01')
+    this.uniswapV3RangeOrders_owner1 = await UniswapV3RangeOrders01.attach(this.uniswapV3RangeOrders.address).connect(this.owner1)
+    this.uniswapV3RangeOrders_owner2 = await UniswapV3RangeOrders01.attach(this.uniswapV3RangeOrders.address).connect(this.owner2)
+    this.uniswapV3RangeOrders_resolver = await UniswapV3RangeOrders01.attach(this.uniswapV3RangeOrders.address).connect(this.resolver)
 
     this.setupOrders = setupOrders.bind(this)
     this.resolveAllOrders = resolveAllOrders.bind(this)
@@ -72,17 +72,17 @@ describe('UniV3RangeOrderPool', function () {
       })
 
       it('should add position data', async function () {
-        const position = await this.rangeOrderPool.positions(this.positionHash)
+        const position = await this.uniswapV3RangeOrders.positions(this.positionHash)
         expect(position.tokenId.toNumber()).to.equal(2)
         expect(position.pool).to.equal(this.pool.address)
         expect(position.cachedSecondsOutside).to.equal(1)
       })
 
       it('should increment owner liquidity', async function () {
-        const positionId = (await this.rangeOrderPool.positions(this.positionHash)).tokenId
+        const positionId = (await this.uniswapV3RangeOrders.positions(this.positionHash)).tokenId
         const totalLiquidity = (await this.nftPositionManager.positions(positionId)).liquidity
-        const owner1Liquidity = await this.rangeOrderPool.liquidityBalances(this.positionHash, this.owner1.address)
-        const owner2Liquidity = await this.rangeOrderPool.liquidityBalances(this.positionHash, this.owner2.address)
+        const owner1Liquidity = await this.uniswapV3RangeOrders.liquidityBalances(this.positionHash, this.owner1.address)
+        const owner2Liquidity = await this.uniswapV3RangeOrders.liquidityBalances(this.positionHash, this.owner2.address)
 
         // add 1 for rounding err
         const expectedOwner1Liq = this.inputAmounts[0].mul(totalLiquidity).div(this.totalInputAmount).add(1)
@@ -250,9 +250,9 @@ describe('UniV3RangeOrderPool', function () {
         await this.setupOrders()
 
         this.owner1_iETHBalance = await ethers.provider.getBalance(this.owner1.address)
-        const ownerLiquidity = await this.rangeOrderPool.liquidityBalances(this.positionHash, this.owner1.address)
+        const ownerLiquidity = await this.uniswapV3RangeOrders.liquidityBalances(this.positionHash, this.owner1.address)
 
-        this.txPromise = this.rangeOrderPool_owner1.withdrawOrder([
+        this.txPromise = this.uniswapV3RangeOrders_owner1.withdrawOrder([
           this.positionHash,
           this.weth.address,
           this.AAA.address,
@@ -286,9 +286,9 @@ describe('UniV3RangeOrderPool', function () {
       beforeEach(async function () {
         await this.setupOrders()
         await this.tokenToEthSwap(this.signer0, this.AAA, BN(10000000).mul(BN18))
-        const ownerLiquidity = await this.rangeOrderPool.liquidityBalances(this.positionHash, this.owner1.address)
+        const ownerLiquidity = await this.uniswapV3RangeOrders.liquidityBalances(this.positionHash, this.owner1.address)
         this.owner1_iETHBalance = await ethers.provider.getBalance(this.owner1.address)
-        this.txPromise = this.rangeOrderPool_owner1.withdrawOrder([
+        this.txPromise = this.uniswapV3RangeOrders_owner1.withdrawOrder([
           this.positionHash,
           this.weth.address,
           this.AAA.address,
@@ -324,8 +324,8 @@ describe('UniV3RangeOrderPool', function () {
       beforeEach(async function () {
         await this.setupOrders()
         await this.tokenToEthSwap(this.signer0, this.AAA, BN(20000000).mul(BN18))
-        const ownerLiquidity = await this.rangeOrderPool.liquidityBalances(this.positionHash, this.owner1.address)
-        this.txPromise = this.rangeOrderPool_owner1.withdrawOrder([
+        const ownerLiquidity = await this.uniswapV3RangeOrders.liquidityBalances(this.positionHash, this.owner1.address)
+        this.txPromise = this.uniswapV3RangeOrders_owner1.withdrawOrder([
           this.positionHash,
           this.weth.address,
           this.AAA.address,
@@ -376,12 +376,12 @@ async function setupOrders (opts = {}) {
   if (this.tokenIn.address !== this.weth.address) {
     // approve and multicall if tokenIn is ERC20
     await this.tokenIn.mint(this.signer0.address, this.totalInputAmount)
-    await this.tokenIn.approve(this.rangeOrderPool.address, this.totalInputAmount)
+    await this.tokenIn.approve(this.uniswapV3RangeOrders.address, this.totalInputAmount)
 
-    const pullPaymentData = this.rangeOrderPool.interface.encodeFunctionData('pullPayment', [
+    const pullPaymentData = this.uniswapV3RangeOrders.interface.encodeFunctionData('pullPayment', [
       this.tokenIn.address, this.signer0.address, this.totalInputAmount
     ])
-    const createOrdersData = this.rangeOrderPool.interface.encodeFunctionData('createOrders', [[
+    const createOrdersData = this.uniswapV3RangeOrders.interface.encodeFunctionData('createOrders', [[
       this.owners,
       this.inputAmounts,
       this.totalInputAmount,
@@ -391,10 +391,10 @@ async function setupOrders (opts = {}) {
       this.rangeTickLower,
       this.rangeTickUpper
     ]])
-    this.tx = await this.rangeOrderPool.multicall([pullPaymentData, createOrdersData])
+    this.tx = await this.uniswapV3RangeOrders.multicall([pullPaymentData, createOrdersData])
   } else {
     // call directly as payable if tokenIn is WETH
-    this.tx = await this.rangeOrderPool.createOrders([
+    this.tx = await this.uniswapV3RangeOrders.createOrders([
       this.owners,
       this.inputAmounts,
       this.totalInputAmount,
@@ -406,14 +406,14 @@ async function setupOrders (opts = {}) {
     ], { value: this.totalInputAmount })
   }
 
-  this.positionId = (await this.rangeOrderPool.positions(this.positionHash)).tokenId
+  this.positionId = (await this.uniswapV3RangeOrders.positions(this.positionHash)).tokenId
 }
 
 async function resolveAllOrders () {
-  const owner1Liq = await this.rangeOrderPool.liquidityBalances(this.positionHash, this.owner1.address)
-  const owner2Liq = await this.rangeOrderPool.liquidityBalances(this.positionHash, this.owner2.address)
+  const owner1Liq = await this.uniswapV3RangeOrders.liquidityBalances(this.positionHash, this.owner1.address)
+  const owner2Liq = await this.uniswapV3RangeOrders.liquidityBalances(this.positionHash, this.owner2.address)
 
-  this.txPromise = this.rangeOrderPool_resolver.resolveOrders([
+  this.txPromise = this.uniswapV3RangeOrders_resolver.resolveOrders([
     this.owners,
     this.tokenIn.address,
     this.tokenOut.address,
@@ -428,8 +428,8 @@ async function resolveAllOrders () {
 async function expectBalancesCleared () {
   const nftManagerETHBal = await ethers.provider.getBalance(this.nftPositionManager.address)
   const nftManagerAAABal = await this.AAA.balanceOf(this.nftPositionManager.address)
-  const rangeOrderPoolETHBal = await ethers.provider.getBalance(this.rangeOrderPool.address)
-  const rangeOrderPoolAAABal = await this.AAA.balanceOf(this.rangeOrderPool.address)
+  const rangeOrderPoolETHBal = await ethers.provider.getBalance(this.uniswapV3RangeOrders.address)
+  const rangeOrderPoolAAABal = await this.AAA.balanceOf(this.uniswapV3RangeOrders.address)
   expect(nftManagerETHBal.toNumber()).to.equal(0)
   expect(nftManagerAAABal.toNumber()).to.equal(0)
   expect(rangeOrderPoolETHBal.toNumber()).to.equal(0)
