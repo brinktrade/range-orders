@@ -87,7 +87,7 @@ async function deployContract (contract, paramTypes, paramValues, salt) {
   const computedAddr = this.computeDeployedAddress(contract, paramTypes, paramValues, salt)
   const initParams = abiCoder.encode(paramTypes, paramValues).slice(2)
   const initCode = `${contract.bytecode}${initParams}`
-  await this.deployer.create(initCode, salt)
+  await this.deployer.deployContract(initCode, salt)
   const contractInstance = await contract.attach(computedAddr)
   return contractInstance
 }
