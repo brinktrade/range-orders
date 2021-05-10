@@ -16,121 +16,35 @@ import "../uniswap-v3-core-contracts/interfaces/IUniswapV3Pool.sol";
 import "../uniswap-v3-core-contracts/libraries/FixedPoint128.sol";
 import "../uniswap-v3-core-contracts/libraries/FullMath.sol";
 
+import "./interfaces/IUniswapV3RangeOrders.sol";
+
 import "hardhat/console.sol";
 
 /**
  * @dev Allows pooled ownership in Uniswap V3 "Range Order" positions, and public resolution of
  * positions for a reward.
  */
-contract RangeOrderPool01 is Multicall {
+contract UniswapV3RangeOrders01 is IUniswapV3RangeOrders, Multicall {
   using SafeMath for uint256;
 
   // TODO: add events
 
-  /*
-   * Storage for position data
-   *
-   * uint256 tokenId: ID of the position token in NonfungiblePositionManager
-   * IUniswapV3Pool pool: The UniswapV3Pool contract for the position
-   * uint128 tokenInFees: accrued fees in tokenIn that have not been collected
-   * uint128 tokenOutFees: accrued fees in tokenOut that have not been collected
-   * uint32 cachedSecondsOutside: cached secondsOutside value used to compute
-   *   `resolveableSeconds`. equivalent to using secondsOutside for maxTick or minTick,
-   *   but since the secondsOutside value for those is not gauranteed to be stored on
-   *   UniswapV3Pool without creating a new position with maxTick or minTick as one of
-   *   the range bounds, we are storing it here.
-   */
-  struct Position {
-    uint256 tokenId;
-    IUniswapV3Pool pool;
-    uint128 tokenInFees;
-    uint128 tokenOutFees;
-    uint32 cachedSecondsOutside;
-  }
-
-  /*
-   * Input params for createOrders()
-   *
-   * address[] owners: array of owners for the new orders
-   * uint256[] inputAmounts: array of tokenIn amounts for the new owners
-   * uint256 totalInputAmount: total of inputAmounts, required to be equal to the sum
-   *    of inputAmounts values
-   * address tokenIn: input token for the orders
-   * address tokenOut: output token for the orders
-   * uint24 fee: fee amount for the UniswapV3Pool
-   * int24 tickLower: lower bound for the range orders
-   * int24 tickUpper: upper bound for the range orders
-   */
-  struct CreateOrdersParams {
-    address[] owners;
-    uint256[] inputAmounts;
-    uint256 totalInputAmount;
-    address tokenIn;
-    address tokenOut;
-    uint24 fee;
-    int24 tickLower;
-    int24 tickUpper;
-  }
-
-  /*
-   * Input params for resolveOrders()
-   *
-   * address[] owners: array of owners to resolve liquidity for
-   * address tokenIn: input token for the resolvable orders
-   * address tokenOut: output token for the resolvable orders
-   * uint24 fee: fee amount for the UniswapV3Pool
-   * int24 tickLower: lower bound for the resolvable orders
-   * int24 tickUpper: upper bound for the resolvable orders
-   * uint128 resolveLiquidity: total amount of liquidity that will be resolved on
-   *    the position
-   * address resolver: address that will receive the resolve reward
-   */
-  struct ResolveOrdersParams {
-    address[] owners;
-    address tokenIn;
-    address tokenOut;
-    uint24 fee;
-    int24 tickLower;
-    int24 tickUpper;
-    uint128 resolveLiquidity;
-    address resolver;
-  }
-
-  /*
-   * Input params for withdrawOrder()
-   *
-   * bytes32 positionHash: hash of the position to withdraw liquidity from
-   * address tokenIn: input token for the order
-   * address tokenOut: output token for the order
-   * uint256 liquidity: amount of liquidity to withdraw
-   */
-  struct WithdrawParams {
-    bytes32 positionHash;
-    address tokenIn;
-    address tokenOut;
-    uint256 liquidity;
-  }
-
   /// Address of NonfungiblePositionManager
-  INonfungiblePositionManager public immutable nonfungiblePositionManager;
+  INonfungiblePositionManager public immutable override nonfungiblePositionManager;
 
   /// Address of UniswapV3Factory (must match NonfungiblePositionManager factory)
-  address public immutable factory;
+  address public immutable override factory;
 
   /// Address of WETH9  (must match NonfungiblePositionManager WETH9)
-  address public immutable WETH9;
+  address public immutable override WETH9;
 
   /// Number of seconds to run resolve auctions. If a position is resolvable for
   /// this many seconds, 100% of liquidity will be transferred to the resolver
-  uint32 public immutable resolveAuctionTimespan;
+  uint32 public immutable override resolveAuctionTimespan;
 
-  /// Stored data for positions
-  /// positionHash => Position
-  mapping(bytes32 => Position) public positions;
+  mapping(bytes32 => Position) private _positions;
 
-  /// Stored owner liquidity balances on positions. Referred to as "orders"
-  /// positionHash => ownerAddress => liquidityBalance
-  mapping(bytes32 => mapping(address => uint128)) public liquidityBalances;
+  mapping(bytes32 => mapping(address => uint128)) private _liquidityBalances;
 
   constructor (
     INonfungiblePositionManager _nonfungiblePositionManager,
@@ -148,6 +62,25 @@ contract RangeOrderPool01 is Multicall {
   receive() external payable {
     require(msg.sender == WETH9, 'NOT_WETH9');
   }
+  
+  /// returns stored data for positions
+  /// positionHash => Position
+  function positions (bytes32 positionHash)
+    external view override
+    returns (Position memory position)
+  {
+    position = _positions[positionHash];
+    require(position.tokenId != 0, 'INVALID_POSITION_HASH');
+  }
+
+  /// Returns stored owner liquidity balances on positions
+  /// positionHash => ownerAddress => liquidityBalance
+  function liquidityBalances (bytes32 positionHash, address owner)
+    external view override
+    returns (uint128 liquidityBalance)
+  {
+    liquidityBalance = _liquidityBalances[positionHash][owner];
+  }
 
   /*
    * @dev Increases liquidity balances for owners. Can be called by any address
@@ -161,8 +94,7 @@ contract RangeOrderPool01 is Multicall {
    * If tokenIn is WETH9, ETH must be paid by the sender.
    */
   function createOrders(CreateOrdersParams calldata params)
-    external
-    payable
+    external payable override
   {
     require(params.owners.length == params.inputAmounts.length, 'ORDERS_LENGTH_MISMATCH');
 
@@ -170,7 +102,7 @@ contract RangeOrderPool01 is Multicall {
     bytes32 positionHash = keccak256(abi.encode(
       params.tokenIn, params.tokenOut, params.fee, params.tickLower, params.tickUpper
     ));
-    Position storage position = positions[positionHash];
+    Position storage position = _positions[positionHash];
 
     // if position has not been minted, calculate the pool address and store it here.
     // this let's us check the pool's tick state and revert early if the range is invalid
@@ -229,7 +161,7 @@ contract RangeOrderPool01 is Multicall {
         remainder = true;
         ownerLiquidity++;
       }
-      liquidityBalances[positionHash][params.owners[i]] += ownerLiquidity;
+      _liquidityBalances[positionHash][params.owners[i]] += ownerLiquidity;
     }
     require(accumInputAmount == params.totalInputAmount, 'BAD_INPUT_AMOUNT');
   }
@@ -252,7 +184,7 @@ contract RangeOrderPool01 is Multicall {
    *       owner addresses would exceed the block gas limit.
    */
   function resolveOrders(ResolveOrdersParams calldata params)
-    external
+    external override
   {
     uint128 tokenOutOwed;
     bytes32 positionHash = keccak256(abi.encode(
@@ -260,7 +192,7 @@ contract RangeOrderPool01 is Multicall {
     ));
 
     {
-      Position storage position = positions[positionHash];
+      Position storage position = _positions[positionHash];
 
       ( , , address token0, , , , , uint128 totalLiquidity, , , , ) = nonfungiblePositionManager.positions(position.tokenId);
 
@@ -335,7 +267,7 @@ contract RangeOrderPool01 is Multicall {
     bool remainder;
     for(uint8 i = 0; i < params.owners.length; i++) {
       address owner = params.owners[i];
-      uint128 ownerLiquidity = liquidityBalances[positionHash][owner];
+      uint128 ownerLiquidity = _liquidityBalances[positionHash][owner];
       uint256 tokenOutOwnerOwed = FullMath.mulDiv(
         tokenOutOwed, ownerLiquidity, params.resolveLiquidity
       );
@@ -361,12 +293,12 @@ contract RangeOrderPool01 is Multicall {
   /// call with their address? If withdrawOrder() happens first, resolveOrders() will revert (and vice-versa).
   /// Is this an edge case and we expect resolvers to deal with reverts and the additional cost of this?
   function withdrawOrder (WithdrawParams calldata params)
-    external
+    external override
   {
-    uint128 ownerLiquidity = liquidityBalances[params.positionHash][msg.sender];
+    uint128 ownerLiquidity = _liquidityBalances[params.positionHash][msg.sender];
     require(params.liquidity <= ownerLiquidity, 'NOT_ENOUGHT_LIQUIDITY');
 
-    Position storage position = positions[params.positionHash];
+    Position storage position = _positions[params.positionHash];
 
     (uint256 token0CollectAmount, uint256 token1CollectAmount, uint128 tokenInFees, uint128 tokenOutFees) = _decreasePositionLiquidity(
       params.positionHash, params.tokenIn, params.tokenOut, ownerLiquidity
@@ -386,7 +318,7 @@ contract RangeOrderPool01 is Multicall {
    *      in which case pullPayment() isn't needed
    */
   function pullPayment (address token, address payer, uint256 value)
-    external
+    external override
   {
     TransferHelper_V3Periphery.safeTransferFrom(token, payer, address(this), value);
   }
@@ -396,7 +328,7 @@ contract RangeOrderPool01 is Multicall {
     internal
     returns (uint128 liquidity)
   {
-    Position storage position = positions[positionHash];
+    Position storage position = _positions[positionHash];
 
     uint256 tokenId;
     (tokenId, liquidity, , ) = nonfungiblePositionManager.mint{ value: address(this).balance }(
@@ -429,7 +361,7 @@ contract RangeOrderPool01 is Multicall {
     internal
     returns (uint128 liquidity, uint128 tokenInFees, uint128 tokenOutFees)
   {
-    Position memory position = positions[positionHash];
+    Position memory position = _positions[positionHash];
 
     ( , , , , , , , , , , uint128 iTokensOwed0, uint128 iTokensOwed1)
       = nonfungiblePositionManager.positions(position.tokenId);
@@ -463,7 +395,7 @@ contract RangeOrderPool01 is Multicall {
     uint128 tokensOwedDiff0;
     uint128 tokensOwedDiff1;
     {
-      Position memory position = positions[positionHash];
+      Position memory position = _positions[positionHash];
       ( , , , , , , , , , , uint128 iTokensOwed0, uint128 iTokensOwed1)
         = nonfungiblePositionManager.positions(position.tokenId);
       (token0Amount, token1Amount) = nonfungiblePositionManager.decreaseLiquidity(
