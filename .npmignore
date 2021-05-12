@@ -9,3 +9,9 @@ secrets**
 .env**
 .ganacheDB
 .snapshot**
+
+artifacts/*
+!artifacts/contracts
+artifacts/contracts/*
+!artifacts/contracts/interfaces
+!artifacts/contracts/UniswapV3RangeOrders01.sol
