@@ -1,7 +1,7 @@
 {
   "_format": "hh-sol-artifact-1",
-  "contractName": "IUniswapV3RangeOrders",
-  "sourceName": "contracts/interfaces/IUniswapV3RangeOrders.sol",
+  "contractName": "IRangeOrdersPositionManager",
+  "sourceName": "contracts/interfaces/IRangeOrdersPositionManager.sol",
   "abi": [
     {
       "inputs": [],
@@ -61,7 +61,7 @@
               "type": "int24"
             }
           ],
-          "internalType": "struct IUniswapV3RangeOrders.CreateOrdersParams",
+          "internalType": "struct IRangeOrdersPositionManager.CreateOrdersParams",
           "name": "params",
           "type": "tuple"
         }
@@ -159,7 +159,7 @@
               "type": "uint32"
             }
           ],
-          "internalType": "struct IUniswapV3RangeOrders.Position",
+          "internalType": "struct IRangeOrdersPositionManager.Position",
           "name": "position",
           "type": "tuple"
         }
@@ -248,7 +248,7 @@
               "type": "address"
             }
           ],
-          "internalType": "struct IUniswapV3RangeOrders.ResolveOrdersParams",
+          "internalType": "struct IRangeOrdersPositionManager.ResolveOrdersParams",
           "name": "params",
           "type": "tuple"
         }
@@ -283,7 +283,7 @@
               "type": "uint256"
             }
           ],
-          "internalType": "struct IUniswapV3RangeOrders.WithdrawParams",
+          "internalType": "struct IRangeOrdersPositionManager.WithdrawParams",
           "name": "params",
           "type": "tuple"
         }

@@ -16,13 +16,13 @@ import "../uniswap-v3-core-contracts/interfaces/IUniswapV3Pool.sol";
 import "../uniswap-v3-core-contracts/libraries/FixedPoint128.sol";
 import "../uniswap-v3-core-contracts/libraries/FullMath.sol";
 
-import "./interfaces/IUniswapV3RangeOrders.sol";
+import "./interfaces/IRangeOrdersPositionManager.sol";
 
 /**
  * @dev Allows pooled ownership in Uniswap V3 "Range Order" positions, and public resolution of
  * positions for a reward.
  */
-contract UniswapV3RangeOrders01 is IUniswapV3RangeOrders, Multicall {
+contract RangeOrdersPositionManager is IRangeOrdersPositionManager, Multicall {
   using SafeMath for uint256;
 
   // TODO: add events

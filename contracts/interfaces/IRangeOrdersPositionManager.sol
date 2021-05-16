@@ -6,7 +6,7 @@ pragma abicoder v2;
 import "../../uniswap-v3-core-contracts/interfaces/IUniswapV3Pool.sol";
 import "../../uniswap-v3-periphery-contracts/interfaces/INonfungiblePositionManager.sol";
 
-interface IUniswapV3RangeOrders {
+interface IRangeOrdersPositionManager {
 
   function nonfungiblePositionManager() external view returns (INonfungiblePositionManager);
 
