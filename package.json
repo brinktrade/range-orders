@@ -3,8 +3,7 @@
   "version": "0.1.2",
   "scripts": {
     "compile": "hardhat compile",
-    "test": "hardhat test",
-    "postinstall": "yarn run compile"
+    "test": "hardhat test"
   },
   "description": "Uniswap V3 range orders",
   "author": "@mikec",
