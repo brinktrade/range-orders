@@ -14,4 +14,4 @@ artifacts/*
 !artifacts/contracts
 artifacts/contracts/*
 !artifacts/contracts/interfaces
-!artifacts/contracts/RangeOrdersPositionManager.sol
+!artifacts/contracts/RangeOrderPositionManager.sol

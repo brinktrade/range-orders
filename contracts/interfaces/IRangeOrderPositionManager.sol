@@ -5,7 +5,7 @@ pragma abicoder v2;
 
 import "./IUniswapV3Pool.sol";
 
-interface IRangeOrdersPositionManager {
+interface IRangeOrderPositionManager {
   /*
    * Storage for position data
    *

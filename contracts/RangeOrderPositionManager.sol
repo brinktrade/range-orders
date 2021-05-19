@@ -6,9 +6,9 @@ pragma abicoder v2;
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./base/Multicall.sol";
-import "./base/RangeOrdersPayments.sol";
+import "./base/RangeOrderPayments.sol";
 import "./interfaces/IUniswapV3Pool.sol";
-import "./interfaces/IRangeOrdersPositionManager.sol";
+import "./interfaces/IRangeOrderPositionManager.sol";
 import './interfaces/callback/IUniswapV3MintCallback.sol';
 import './libraries/CallbackValidation.sol';
 import "./libraries/FixedPoint128.sol";
@@ -25,7 +25,7 @@ import "./libraries/TransferHelper.sol";
  * values. Allows range order positions to be resolved once they have fully "crossed" from
  * `tokenIn` to `tokenOut`.
  */
-contract RangeOrdersPositionManager is IRangeOrdersPositionManager, IUniswapV3MintCallback, Multicall, RangeOrdersPayments {
+contract RangeOrderPositionManager is IRangeOrderPositionManager, IUniswapV3MintCallback, Multicall, RangeOrderPayments {
   using SafeMath for uint256;
 
   // TODO: add events

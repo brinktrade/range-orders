@@ -7,7 +7,7 @@ import '../interfaces/external/IWETH9.sol';
 import '../libraries/TransferHelper.sol';
 import './PeripheryImmutableState.sol';
 
-abstract contract RangeOrdersPayments is PeripheryImmutableState {
+abstract contract RangeOrderPayments is PeripheryImmutableState {
     receive() external payable {
         require(msg.sender == WETH9, 'Not WETH9');
     }

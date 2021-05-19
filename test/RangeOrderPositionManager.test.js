@@ -21,7 +21,7 @@ const aaaAmt = bn_3b
 const DEFAULT_TICK_SPACING = 60
 const DEFAULT_NEXT_TICK = 80040
 
-describe('RangeOrdersPositionManager', function () {
+describe('RangeOrderPositionManager', function () {
   before(async function () {
     const UniswapV3Pool = await ethers.getContractFactory('UniswapV3Pool')
     console.log('POOL_INIT_CODE_HASH for PoolAddress.sol: ', soliditySha3(UniswapV3Pool.bytecode))
@@ -50,15 +50,15 @@ describe('RangeOrdersPositionManager', function () {
       console.log(`owner2: ${owner2.address}`)
       console.log(`WETH-AAA-MEDIUM Pool: ${this.pools.WETH.AAA.MEDIUM.address}`)
       console.log(`nftPositionManager: ${this.nftPositionManager.address}`)
-      console.log(`rangeOrderPool: ${this.rangeOrdersPositionManager.address}`)
+      console.log(`rangeOrderPool: ${this.RangeOrderPositionManager.address}`)
       console.log()
       this.logInfo = false
     }
 
-    const RangeOrdersPositionManager = await ethers.getContractFactory('RangeOrdersPositionManager')
-    this.rangeOrdersPositionManager_owner1 = await RangeOrdersPositionManager.attach(this.rangeOrdersPositionManager.address).connect(this.owner1)
-    this.rangeOrdersPositionManager_owner2 = await RangeOrdersPositionManager.attach(this.rangeOrdersPositionManager.address).connect(this.owner2)
-    this.rangeOrdersPositionManager_resolver = await RangeOrdersPositionManager.attach(this.rangeOrdersPositionManager.address).connect(this.resolver)
+    const RangeOrderPositionManager = await ethers.getContractFactory('RangeOrderPositionManager')
+    this.RangeOrderPositionManager_owner1 = await RangeOrderPositionManager.attach(this.RangeOrderPositionManager.address).connect(this.owner1)
+    this.RangeOrderPositionManager_owner2 = await RangeOrderPositionManager.attach(this.RangeOrderPositionManager.address).connect(this.owner2)
+    this.RangeOrderPositionManager_resolver = await RangeOrderPositionManager.attach(this.RangeOrderPositionManager.address).connect(this.resolver)
 
     this.setupOrders = setupOrders.bind(this)
     this.resolveAllOrders = resolveAllOrders.bind(this)
@@ -72,15 +72,15 @@ describe('RangeOrdersPositionManager', function () {
       })
 
       it('should add liquidity', async function () {
-        const position = await this.rangeOrdersPositionManager.positions(this.positionHash)
+        const position = await this.RangeOrderPositionManager.positions(this.positionHash)
         expect(position.liquidity.gt(0)).to.equal(true)
       })
 
       it('should increment owner liquidity', async function () {
-        const position = await this.rangeOrdersPositionManager.positions(this.positionHash)
+        const position = await this.RangeOrderPositionManager.positions(this.positionHash)
         const totalLiquidity = position.liquidity
-        const owner1Liquidity = await this.rangeOrdersPositionManager.liquidityBalances(this.positionHash, this.owner1.address)
-        const owner2Liquidity = await this.rangeOrdersPositionManager.liquidityBalances(this.positionHash, this.owner2.address)
+        const owner1Liquidity = await this.RangeOrderPositionManager.liquidityBalances(this.positionHash, this.owner1.address)
+        const owner2Liquidity = await this.RangeOrderPositionManager.liquidityBalances(this.positionHash, this.owner2.address)
 
         // add 1 for rounding err
         const expectedOwner1Liq = this.inputAmounts[0].mul(totalLiquidity).div(this.totalInputAmount).add(1)
@@ -248,9 +248,9 @@ describe('RangeOrdersPositionManager', function () {
         await this.setupOrders()
 
         this.owner1_iETHBalance = await ethers.provider.getBalance(this.owner1.address)
-        const ownerLiquidity = await this.rangeOrdersPositionManager.liquidityBalances(this.positionHash, this.owner1.address)
+        const ownerLiquidity = await this.RangeOrderPositionManager.liquidityBalances(this.positionHash, this.owner1.address)
 
-        this.txPromise = this.rangeOrdersPositionManager_owner1.withdrawOrder([
+        this.txPromise = this.RangeOrderPositionManager_owner1.withdrawOrder([
           this.positionHash,
           this.weth.address,
           this.AAA.address,
@@ -284,9 +284,9 @@ describe('RangeOrdersPositionManager', function () {
       beforeEach(async function () {
         await this.setupOrders()
         await this.tokenToEthSwap(this.signer0, this.AAA, BN(10000000).mul(BN18))
-        const ownerLiquidity = await this.rangeOrdersPositionManager.liquidityBalances(this.positionHash, this.owner1.address)
+        const ownerLiquidity = await this.RangeOrderPositionManager.liquidityBalances(this.positionHash, this.owner1.address)
         this.owner1_iETHBalance = await ethers.provider.getBalance(this.owner1.address)
-        this.txPromise = this.rangeOrdersPositionManager_owner1.withdrawOrder([
+        this.txPromise = this.RangeOrderPositionManager_owner1.withdrawOrder([
           this.positionHash,
           this.weth.address,
           this.AAA.address,
@@ -322,8 +322,8 @@ describe('RangeOrdersPositionManager', function () {
       beforeEach(async function () {
         await this.setupOrders()
         await this.tokenToEthSwap(this.signer0, this.AAA, BN(20000000).mul(BN18))
-        const ownerLiquidity = await this.rangeOrdersPositionManager.liquidityBalances(this.positionHash, this.owner1.address)
-        this.txPromise = this.rangeOrdersPositionManager_owner1.withdrawOrder([
+        const ownerLiquidity = await this.RangeOrderPositionManager.liquidityBalances(this.positionHash, this.owner1.address)
+        this.txPromise = this.RangeOrderPositionManager_owner1.withdrawOrder([
           this.positionHash,
           this.weth.address,
           this.AAA.address,
@@ -374,9 +374,9 @@ async function setupOrders (opts = {}) {
   if (this.tokenIn.address !== this.weth.address) {
     // approve if tokenIn is ERC20
     await this.tokenIn.mint(this.signer0.address, this.totalInputAmount)
-    await this.tokenIn.approve(this.rangeOrdersPositionManager.address, this.totalInputAmount)
+    await this.tokenIn.approve(this.RangeOrderPositionManager.address, this.totalInputAmount)
 
-    this.tx = await this.rangeOrdersPositionManager.createOrders([
+    this.tx = await this.RangeOrderPositionManager.createOrders([
       this.owners,
       this.inputAmounts,
       this.totalInputAmount,
@@ -388,7 +388,7 @@ async function setupOrders (opts = {}) {
     ])
   } else {
     // call directly as payable if tokenIn is WETH
-    this.tx = await this.rangeOrdersPositionManager.createOrders([
+    this.tx = await this.RangeOrderPositionManager.createOrders([
       this.owners,
       this.inputAmounts,
       this.totalInputAmount,
@@ -400,14 +400,14 @@ async function setupOrders (opts = {}) {
     ], { value: this.totalInputAmount })
   }
 
-  this.positionId = (await this.rangeOrdersPositionManager.positions(this.positionHash)).tokenId
+  this.positionId = (await this.RangeOrderPositionManager.positions(this.positionHash)).tokenId
 }
 
 async function resolveAllOrders () {
-  const owner1Liq = await this.rangeOrdersPositionManager.liquidityBalances(this.positionHash, this.owner1.address)
-  const owner2Liq = await this.rangeOrdersPositionManager.liquidityBalances(this.positionHash, this.owner2.address)
+  const owner1Liq = await this.RangeOrderPositionManager.liquidityBalances(this.positionHash, this.owner1.address)
+  const owner2Liq = await this.RangeOrderPositionManager.liquidityBalances(this.positionHash, this.owner2.address)
 
-  this.txPromise = this.rangeOrdersPositionManager_resolver.resolveOrders([
+  this.txPromise = this.RangeOrderPositionManager_resolver.resolveOrders([
     this.owners,
     this.tokenIn.address,
     this.tokenOut.address,
@@ -422,8 +422,8 @@ async function resolveAllOrders () {
 async function expectBalancesCleared () {
   const nftManagerETHBal = await ethers.provider.getBalance(this.nftPositionManager.address)
   const nftManagerAAABal = await this.AAA.balanceOf(this.nftPositionManager.address)
-  const rangeOrderPoolETHBal = await ethers.provider.getBalance(this.rangeOrdersPositionManager.address)
-  const rangeOrderPoolAAABal = await this.AAA.balanceOf(this.rangeOrdersPositionManager.address)
+  const rangeOrderPoolETHBal = await ethers.provider.getBalance(this.RangeOrderPositionManager.address)
+  const rangeOrderPoolAAABal = await this.AAA.balanceOf(this.RangeOrderPositionManager.address)
   expect(nftManagerETHBal.toNumber()).to.equal(0)
   expect(nftManagerAAABal.toNumber()).to.equal(0)
   expect(rangeOrderPoolETHBal.toNumber()).to.equal(0)
