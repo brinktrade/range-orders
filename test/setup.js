@@ -58,14 +58,10 @@ async function setup () {
     this.uniswapV3Factory.address, this.weth.address, this.nftPositionDescriptor.address
   )
 
-  const resolveAuctionTimespan = 1000
-
-  const UniswapV3RangeOrders01 = await ethers.getContractFactory('UniswapV3RangeOrders01')
-  this.uniswapV3RangeOrders = await UniswapV3RangeOrders01.deploy(
-    this.nftPositionManager.address,
+  const RangeOrdersPositionManager = await ethers.getContractFactory('RangeOrdersPositionManager')
+  this.rangeOrdersPositionManager = await RangeOrdersPositionManager.deploy(
     this.uniswapV3Factory.address,
-    this.weth.address,
-    resolveAuctionTimespan
+    this.weth.address
   )
 }
 
