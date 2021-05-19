@@ -65,22 +65,20 @@ describe('RangeOrdersPositionManager', function () {
     this.expectBalancesCleared = expectBalancesCleared.bind(this)
   })
 
-  describe('createOrders()', function () {
+  describe.only('createOrders()', function () {
     describe('when given ETH input orders and a valid range', function () {
       beforeEach(async function () {
         await this.setupOrders()
       })
 
-      it('should add position data', async function () {
+      it('should add liquidity', async function () {
         const position = await this.rangeOrdersPositionManager.positions(this.positionHash)
-        expect(position.tokenId.toNumber()).to.equal(2)
-        expect(position.pool).to.equal(this.pool.address)
-        expect(position.cachedSecondsOutside).to.equal(1)
+        expect(position.liquidity.gt(0)).to.equal(true)
       })
 
       it('should increment owner liquidity', async function () {
-        const positionId = (await this.rangeOrdersPositionManager.positions(this.positionHash)).tokenId
-        const totalLiquidity = (await this.nftPositionManager.positions(positionId)).liquidity
+        const position = await this.rangeOrdersPositionManager.positions(this.positionHash)
+        const totalLiquidity = position.liquidity
         const owner1Liquidity = await this.rangeOrdersPositionManager.liquidityBalances(this.positionHash, this.owner1.address)
         const owner2Liquidity = await this.rangeOrdersPositionManager.liquidityBalances(this.positionHash, this.owner2.address)
 
@@ -374,14 +372,11 @@ async function setupOrders (opts = {}) {
   ))
 
   if (this.tokenIn.address !== this.weth.address) {
-    // approve and multicall if tokenIn is ERC20
+    // approve if tokenIn is ERC20
     await this.tokenIn.mint(this.signer0.address, this.totalInputAmount)
     await this.tokenIn.approve(this.rangeOrdersPositionManager.address, this.totalInputAmount)
 
-    const pullPaymentData = this.rangeOrdersPositionManager.interface.encodeFunctionData('pullPayment', [
-      this.tokenIn.address, this.signer0.address, this.totalInputAmount
-    ])
-    const createOrdersData = this.rangeOrdersPositionManager.interface.encodeFunctionData('createOrders', [[
+    this.tx = await this.rangeOrdersPositionManager.createOrders([
       this.owners,
       this.inputAmounts,
       this.totalInputAmount,
@@ -390,8 +385,7 @@ async function setupOrders (opts = {}) {
       FeeAmount.MEDIUM,
       this.rangeTickLower,
       this.rangeTickUpper
-    ]])
-    this.tx = await this.rangeOrdersPositionManager.multicall([pullPaymentData, createOrdersData])
+    ])
   } else {
     // call directly as payable if tokenIn is WETH
     this.tx = await this.rangeOrdersPositionManager.createOrders([

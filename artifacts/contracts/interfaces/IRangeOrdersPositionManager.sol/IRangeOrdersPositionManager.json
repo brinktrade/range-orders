@@ -4,19 +4,6 @@
   "sourceName": "contracts/interfaces/IRangeOrdersPositionManager.sol",
   "abi": [
     {
-      "inputs": [],
-      "name": "WETH9",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
       "inputs": [
         {
           "components": [
@@ -72,24 +59,16 @@
       "type": "function"
     },
     {
-      "inputs": [],
-      "name": "factory",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
       "inputs": [
         {
           "internalType": "bytes32",
           "name": "positionHash",
           "type": "bytes32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "positionIndex",
+          "type": "uint256"
         },
         {
           "internalType": "address",
@@ -109,13 +88,19 @@
       "type": "function"
     },
     {
-      "inputs": [],
-      "name": "nonfungiblePositionManager",
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "positionHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "positionIndexes",
       "outputs": [
         {
-          "internalType": "contract INonfungiblePositionManager",
-          "name": "",
-          "type": "address"
+          "internalType": "uint256",
+          "name": "positionIndex",
+          "type": "uint256"
         }
       ],
       "stateMutability": "view",
@@ -127,6 +112,11 @@
           "internalType": "bytes32",
           "name": "positionHash",
           "type": "bytes32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "positionIndex",
+          "type": "uint256"
         }
       ],
       "name": "positions",
@@ -134,29 +124,14 @@
         {
           "components": [
             {
-              "internalType": "uint256",
-              "name": "tokenId",
-              "type": "uint256"
-            },
-            {
-              "internalType": "contract IUniswapV3Pool",
-              "name": "pool",
-              "type": "address"
-            },
-            {
               "internalType": "uint128",
-              "name": "tokenInFees",
+              "name": "liquidity",
               "type": "uint128"
             },
             {
-              "internalType": "uint128",
-              "name": "tokenOutFees",
-              "type": "uint128"
-            },
-            {
-              "internalType": "uint32",
-              "name": "cachedSecondsOutside",
-              "type": "uint32"
+              "internalType": "bool",
+              "name": "resolved",
+              "type": "bool"
             }
           ],
           "internalType": "struct IRangeOrdersPositionManager.Position",
@@ -170,37 +145,46 @@
     {
       "inputs": [
         {
-          "internalType": "address",
-          "name": "token",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "payer",
-          "type": "address"
-        },
-        {
-          "internalType": "uint256",
-          "name": "value",
-          "type": "uint256"
+          "components": [
+            {
+              "internalType": "address",
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "tokenOut",
+              "type": "address"
+            },
+            {
+              "internalType": "uint24",
+              "name": "fee",
+              "type": "uint24"
+            },
+            {
+              "internalType": "int24",
+              "name": "tickLower",
+              "type": "int24"
+            },
+            {
+              "internalType": "int24",
+              "name": "tickUpper",
+              "type": "int24"
+            },
+            {
+              "internalType": "address",
+              "name": "recipient",
+              "type": "address"
+            }
+          ],
+          "internalType": "struct IRangeOrdersPositionManager.ResolvePositionParams",
+          "name": "params",
+          "type": "tuple"
         }
       ],
-      "name": "pullPayment",
+      "name": "resolvePosition",
       "outputs": [],
       "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "resolveAuctionTimespan",
-      "outputs": [
-        {
-          "internalType": "uint32",
-          "name": "",
-          "type": "uint32"
-        }
-      ],
-      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -208,9 +192,9 @@
         {
           "components": [
             {
-              "internalType": "address[]",
-              "name": "owners",
-              "type": "address[]"
+              "internalType": "uint256",
+              "name": "positionIndex",
+              "type": "uint256"
             },
             {
               "internalType": "address",
@@ -239,48 +223,13 @@
             },
             {
               "internalType": "uint128",
-              "name": "resolveLiquidity",
+              "name": "liquidity",
               "type": "uint128"
             },
             {
               "internalType": "address",
-              "name": "resolver",
+              "name": "recipient",
               "type": "address"
-            }
-          ],
-          "internalType": "struct IRangeOrdersPositionManager.ResolveOrdersParams",
-          "name": "params",
-          "type": "tuple"
-        }
-      ],
-      "name": "resolveOrders",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "bytes32",
-              "name": "positionHash",
-              "type": "bytes32"
-            },
-            {
-              "internalType": "address",
-              "name": "tokenIn",
-              "type": "address"
-            },
-            {
-              "internalType": "address",
-              "name": "tokenOut",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "liquidity",
-              "type": "uint256"
             }
           ],
           "internalType": "struct IRangeOrdersPositionManager.WithdrawParams",
