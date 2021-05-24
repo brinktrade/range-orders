@@ -6,6 +6,10 @@ pragma abicoder v2;
 import "./IUniswapV3Pool.sol";
 
 interface IRangeOrderPositionManager {
+
+  /// @return Returns the address of the Uniswap V3 factory
+  function factory() external view returns (address);
+
   /*
    * Storage for position data
    *
@@ -54,7 +58,7 @@ interface IRangeOrderPositionManager {
     int24 tickUpper;
   }
 
-  function createOrders(CreateOrdersParams calldata params) external payable;
+  function createOrders(CreateOrdersParams calldata params) external;
 
   /*
    * Input params for resolvePosition()

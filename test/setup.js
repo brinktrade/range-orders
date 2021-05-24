@@ -59,9 +59,8 @@ async function setup () {
   )
 
   const RangeOrderPositionManager = await ethers.getContractFactory('RangeOrderPositionManager')
-  this.RangeOrderPositionManager = await RangeOrderPositionManager.deploy(
-    this.uniswapV3Factory.address,
-    this.weth.address
+  this.rangeOrderPositionManager = await RangeOrderPositionManager.deploy(
+    this.uniswapV3Factory.address
   )
 }
 
