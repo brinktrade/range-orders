@@ -63,7 +63,7 @@ describe('RangeOrderPositionManager', function () {
 
     this.increaseLiquidity = increaseLiquidity.bind(this)
     this.increaseLiquidityMulti = increaseLiquidityMulti.bind(this)
-    this.withdrawOrder = withdrawOrder.bind(this)
+    this.decreaseLiquidity = decreaseLiquidity.bind(this)
     this.resolveAllOrders = resolveAllOrders.bind(this)
   })
 
@@ -143,17 +143,17 @@ describe('RangeOrderPositionManager', function () {
     })
   })
 
-  describe('withdrawOrder()', function () {
+  describe.only('decreaseLiquidity()', function () {
     describe('before the range has been entered', function () {
       beforeEach(async function () {
         await this.increaseLiquidityMulti()
 
-        await this.withdrawOrder({
+        await this.decreaseLiquidity({
           owner: this.owner1,
           tickLower: this.rangeTickLower,
           tickUpper: this.rangeTickUpper
         })
-        await this.withdrawOrder({
+        await this.decreaseLiquidity({
           owner: this.owner2,
           tickLower: this.rangeTickLower,
           tickUpper: this.rangeTickUpper
@@ -381,12 +381,12 @@ async function increaseLiquidityMulti (opts = {}) {
   ])
 }
 
-async function withdrawOrder (opts = {}) {
+async function decreaseLiquidity (opts = {}) {
   const { owner, liquidity, positionIndex, recipient, tickLower, tickUpper, tokenIn, tokenOut } = opts
 
-  if (!tickLower) throw new Error(`withdrawOrder needs tickLower`)
-  if (!tickUpper) throw new Error(`withdrawOrder needs tickUpper`)
-  if (!owner || !owner.address) throw new Error(`withdrawOrder owner should be signer with address`)
+  if (!tickLower) throw new Error(`decreaseLiquidity needs tickLower`)
+  if (!tickUpper) throw new Error(`decreaseLiquidity needs tickUpper`)
+  if (!owner || !owner.address) throw new Error(`decreaseLiquidity owner should be signer with address`)
 
   this.pool = this.pools.WETH.AAA.MEDIUM
   this.tickSpacing = await this.pool.tickSpacing()
@@ -409,7 +409,7 @@ async function withdrawOrder (opts = {}) {
   
   const RangeOrderPositionManager = await ethers.getContractFactory('RangeOrderPositionManager')
   const rangeOrderPositionManager_fromOwner = await RangeOrderPositionManager.attach(this.rangeOrderPositionManager.address).connect(owner)
-  this.tx = await rangeOrderPositionManager_fromOwner.withdrawOrder([
+  this.tx = await rangeOrderPositionManager_fromOwner.decreaseLiquidity([
     this.positionIndex,
     this.tokenIn.address,
     this.tokenOut.address,

@@ -4,6 +4,61 @@
   "sourceName": "contracts/interfaces/IRangeOrderPositionManager.sol",
   "abi": [
     {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "uint256",
+              "name": "positionIndex",
+              "type": "uint256"
+            },
+            {
+              "internalType": "address",
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "tokenOut",
+              "type": "address"
+            },
+            {
+              "internalType": "uint24",
+              "name": "fee",
+              "type": "uint24"
+            },
+            {
+              "internalType": "int24",
+              "name": "tickLower",
+              "type": "int24"
+            },
+            {
+              "internalType": "int24",
+              "name": "tickUpper",
+              "type": "int24"
+            },
+            {
+              "internalType": "uint128",
+              "name": "liquidity",
+              "type": "uint128"
+            },
+            {
+              "internalType": "address",
+              "name": "recipient",
+              "type": "address"
+            }
+          ],
+          "internalType": "struct IRangeOrderPositionManager.DecreaseLiquidityParams",
+          "name": "params",
+          "type": "tuple"
+        }
+      ],
+      "name": "decreaseLiquidity",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
       "inputs": [],
       "name": "factory",
       "outputs": [
@@ -124,6 +179,51 @@
     {
       "inputs": [
         {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "tokenOut",
+              "type": "address"
+            },
+            {
+              "internalType": "uint24",
+              "name": "fee",
+              "type": "uint24"
+            },
+            {
+              "internalType": "int24",
+              "name": "tickLower",
+              "type": "int24"
+            },
+            {
+              "internalType": "int24",
+              "name": "tickUpper",
+              "type": "int24"
+            },
+            {
+              "internalType": "address",
+              "name": "recipient",
+              "type": "address"
+            }
+          ],
+          "internalType": "struct IRangeOrderPositionManager.LiquidateParams",
+          "name": "params",
+          "type": "tuple"
+        }
+      ],
+      "name": "liquidate",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "bytes32",
           "name": "positionHash",
           "type": "bytes32"
@@ -193,7 +293,7 @@
             },
             {
               "internalType": "bool",
-              "name": "resolved",
+              "name": "liquidated",
               "type": "bool"
             }
           ],
@@ -203,51 +303,6 @@
         }
       ],
       "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "tokenIn",
-              "type": "address"
-            },
-            {
-              "internalType": "address",
-              "name": "tokenOut",
-              "type": "address"
-            },
-            {
-              "internalType": "uint24",
-              "name": "fee",
-              "type": "uint24"
-            },
-            {
-              "internalType": "int24",
-              "name": "tickLower",
-              "type": "int24"
-            },
-            {
-              "internalType": "int24",
-              "name": "tickUpper",
-              "type": "int24"
-            },
-            {
-              "internalType": "address",
-              "name": "recipient",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IRangeOrderPositionManager.ResolvePositionParams",
-          "name": "params",
-          "type": "tuple"
-        }
-      ],
-      "name": "resolvePosition",
-      "outputs": [],
-      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
@@ -285,22 +340,22 @@
               "type": "int24"
             },
             {
+              "internalType": "address",
+              "name": "owner",
+              "type": "address"
+            },
+            {
               "internalType": "uint128",
               "name": "liquidity",
               "type": "uint128"
-            },
-            {
-              "internalType": "address",
-              "name": "recipient",
-              "type": "address"
             }
           ],
-          "internalType": "struct IRangeOrderPositionManager.WithdrawParams",
+          "internalType": "struct IRangeOrderPositionManager.ResolveParams",
           "name": "params",
           "type": "tuple"
         }
       ],
-      "name": "withdrawOrder",
+      "name": "resolve",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
