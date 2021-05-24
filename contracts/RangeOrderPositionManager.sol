@@ -4,20 +4,17 @@ pragma solidity >=0.7.5;
 pragma abicoder v2;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./base/Multicall.sol";
-import "./base/RangeOrdersPayments.sol";
 import "./interfaces/IUniswapV3Pool.sol";
-import "./interfaces/IRangeOrdersPositionManager.sol";
+import "./interfaces/IRangeOrderPositionManager.sol";
 import './interfaces/callback/IUniswapV3MintCallback.sol';
 import './libraries/CallbackValidation.sol';
-import "./libraries/FixedPoint128.sol";
 import "./libraries/FullMath.sol";
 import './libraries/LiquidityAmounts.sol';
 import "./libraries/PoolAddress.sol";
-import "./libraries/PositionKey.sol";
 import './libraries/TickMath.sol';
 import "./libraries/TransferHelper.sol";
+
+import "hardhat/console.sol";
 
 /**
  * @dev A Uniswap V3 position manager for Range Orders. Splits liquidity ownership
@@ -25,10 +22,12 @@ import "./libraries/TransferHelper.sol";
  * values. Allows range order positions to be resolved once they have fully "crossed" from
  * `tokenIn` to `tokenOut`.
  */
-contract RangeOrdersPositionManager is IRangeOrdersPositionManager, IUniswapV3MintCallback, Multicall, RangeOrdersPayments {
+contract RangeOrderPositionManager is IRangeOrderPositionManager, IUniswapV3MintCallback {
   using SafeMath for uint256;
 
   // TODO: add events
+
+  address public immutable override factory;
 
   // positionHash => positionIndex
   mapping(bytes32 => uint256) private _positionIndexes;
@@ -39,10 +38,9 @@ contract RangeOrdersPositionManager is IRangeOrdersPositionManager, IUniswapV3Mi
   // positionHash => positionIndex => owner => liquidityBalance
   mapping(bytes32 => mapping(uint256 => mapping(address => uint128))) private _liquidityBalances;
 
-  constructor(
-    address _factory,
-    address _WETH9
-  ) PeripheryImmutableState(_factory, _WETH9) { }
+  constructor(address _factory) {
+    factory = _factory;
+  }
 
   /// returns the current positionIndex for a positionHash
   /// positionHash => positionIndex
@@ -84,9 +82,12 @@ contract RangeOrdersPositionManager is IRangeOrdersPositionManager, IUniswapV3Mi
   ) external override {
     MintCallbackData memory decoded = abi.decode(data, (MintCallbackData));
     CallbackValidation.verifyCallback(factory, decoded.poolKey);
-
-    if (amount0Owed > 0) pay(decoded.poolKey.token0, decoded.payer, msg.sender, amount0Owed);
-    if (amount1Owed > 0) pay(decoded.poolKey.token1, decoded.payer, msg.sender, amount1Owed);
+    if (amount0Owed > 0) {
+      TransferHelper.safeTransferFrom(decoded.poolKey.token0, decoded.payer, msg.sender, amount0Owed);
+    }
+    if (amount1Owed > 0) {
+      TransferHelper.safeTransferFrom(decoded.poolKey.token1, decoded.payer, msg.sender, amount1Owed);
+    }
   }
 
   /*
@@ -99,7 +100,7 @@ contract RangeOrdersPositionManager is IRangeOrdersPositionManager, IUniswapV3Mi
    *
    */
   function createOrders(CreateOrdersParams calldata params)
-    external payable override
+    external override
   {
     require(params.owners.length == params.inputAmounts.length, 'ORDERS_LENGTH_MISMATCH');
 
@@ -145,7 +146,6 @@ contract RangeOrdersPositionManager is IRangeOrdersPositionManager, IUniswapV3Mi
 
     // store individual owner liquidity
     uint256 accumInputAmount;
-    bool remainder;
     for(uint8 i = 0; i < params.inputAmounts.length; i++) {
       uint256 ownerInputAmount = params.inputAmounts[i];
       accumInputAmount += ownerInputAmount;
@@ -154,11 +154,6 @@ contract RangeOrdersPositionManager is IRangeOrdersPositionManager, IUniswapV3Mi
         liquidity,
         params.totalInputAmount
       ));
-      if (!remainder && mulmod(ownerInputAmount, liquidity, params.totalInputAmount) > 0) {
-        // ensures that aggregate owner liquidity equals liquidity and is never off by 1
-        remainder = true;
-        ownerLiquidity++;
-      }
       _liquidityBalances[positionHash][positionIndex][params.owners[i]] += ownerLiquidity;
     }
     require(accumInputAmount == params.totalInputAmount, 'BAD_INPUT_AMOUNT');
@@ -167,9 +162,9 @@ contract RangeOrdersPositionManager is IRangeOrdersPositionManager, IUniswapV3Mi
   }
 
   /*
-   * @dev Withdraws liquidity for an individually owned "order". Can only be called by the balance owner.
-   *      There are no requirements around range for this endpoint, owners can withdraw by calling this
-   *      endpoint directly at any time.
+   * @dev Withdraws liquidity for a position. Can only be called by the liquidity owner.
+   *      owners can withdraw liquidity at any price. If the position range has been
+   *      crossed, the first withdraw will resolve all liquidity in the position
    *
    * Requires:
    *   - owner has enough liquidity balance to withdraw
@@ -219,7 +214,7 @@ contract RangeOrdersPositionManager is IRangeOrdersPositionManager, IUniswapV3Mi
       } else {
         tokenOutOwed = LiquidityAmounts.getAmount0ForLiquidity(sqrtRatioAX96, sqrtRatioBX96, params.liquidity);
       }
-      _transfer(params.tokenOut, recipient, tokenOutOwed);
+      TransferHelper.safeTransfer(params.tokenOut, recipient, tokenOutOwed);
     }
 
     position.liquidity -= params.liquidity;
@@ -231,7 +226,7 @@ contract RangeOrdersPositionManager is IRangeOrdersPositionManager, IUniswapV3Mi
    *
    * Requires:
    *   - range is "resolvable", meaning it is below or above current tick, depending on direction. Current
-   *     tick must "cross" the outer tick in the range.
+   *     tick must "cross" the positon range's outer tick bound
    */
   function resolvePosition(ResolvePositionParams calldata params)
     external override
@@ -298,19 +293,6 @@ contract RangeOrdersPositionManager is IRangeOrdersPositionManager, IUniswapV3Mi
   {
     (uint256 amount0, uint256 amount1) = pool.burn(tickLower, tickUpper, liquidity);
     pool.collect(recipient, tickLower, tickUpper, uint128(amount0), uint128(amount1));
-  }
-
-  function _transfer(address token, address recipient, uint256 amount)
-   internal
-  {
-    if (amount > 0) {
-      if (token == WETH9) {
-        IWETH9(WETH9).withdraw(amount);
-        TransferHelper.safeTransferETH(recipient, amount);
-      } else {
-        TransferHelper.safeTransfer(token, recipient, amount);
-      }
-    }
   }
 
   function _pool (address tokenIn, address tokenOut, uint24 fee)
