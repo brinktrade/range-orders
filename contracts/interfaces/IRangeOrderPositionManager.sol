@@ -10,11 +10,6 @@ interface IRangeOrderPositionManager {
   /// @return Returns the address of the Uniswap V3 factory
   function factory() external view returns (address);
 
-  /*
-   * Storage for position data
-   *
-   *
-   */
   struct Position {
     // amount of liquidity for this position
     uint128 liquidity;
@@ -34,20 +29,27 @@ interface IRangeOrderPositionManager {
     external view
     returns (uint128 liquidityBalance);
 
-  /*
-   * Input params for createOrders()
-   *
-   * address[] owners: array of owners for the new orders
-   * uint256[] inputAmounts: array of tokenIn amounts for the new owners
-   * uint256 totalInputAmount: total of inputAmounts, required to be equal to the sum
-   *    of inputAmounts values
-   * address tokenIn: input token for the orders
-   * address tokenOut: output token for the orders
-   * uint24 fee: fee amount for the UniswapV3Pool
-   * int24 tickLower: lower bound for the range orders
-   * int24 tickUpper: upper bound for the range orders
-   */
-  struct CreateOrdersParams {
+  struct IncreaseLiquidityParams {
+    address owner;
+    uint256 inputAmount;
+    address tokenIn;
+    address tokenOut;
+    uint24 fee;
+    int24 tickLower;
+    int24 tickUpper;
+  }
+
+  /// @notice Increases liquidity for a range position owner
+  /// @param params owner The owner of the position
+  /// inputAmount Amount of tokenIn provided
+  /// tokenIn Input token for the position
+  /// tokenOut Output token for the position
+  /// fee The fee pool for the position
+  /// tickLower Lower bound for the position
+  /// tickUpper Upper bound for the position
+  function increaseLiquidity(IncreaseLiquidityParams calldata params) external;
+
+  struct IncreaseLiquidityMultiParams {
     address[] owners;
     uint256[] inputAmounts;
     uint256 totalInputAmount;
@@ -58,7 +60,16 @@ interface IRangeOrderPositionManager {
     int24 tickUpper;
   }
 
-  function createOrders(CreateOrdersParams calldata params) external;
+  /// @notice Increases liquidity for multiple range position owners
+  /// @param params owners Array of owners
+  /// inputAmounts Array of tokenIn amounts for each owner
+  /// totalInputAmount Total of inputAmounts, required to be equal to the sum of inputAmounts values
+  /// tokenIn Input token for the position
+  /// tokenOut Output token for the position
+  /// fee The fee pool for the position
+  /// tickLower Lower bound for the position
+  /// tickUpper Upper bound for the position
+  function increaseLiquidityMulti(IncreaseLiquidityMultiParams calldata params) external;
 
   /*
    * Input params for resolvePosition()
