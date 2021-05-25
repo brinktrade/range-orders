@@ -10,16 +10,11 @@ interface IRangeOrderPositionManager {
   /// @return Returns the address of the Uniswap V3 factory
   function factory() external view returns (address);
 
-  /*
-   * Storage for position data
-   *
-   *
-   */
   struct Position {
     // amount of liquidity for this position
     uint128 liquidity;
     // true when liquidity for the position has been burned on UniswapV3Pool after position has fully crossed
-    bool resolved;
+    bool liquidated;
   }
 
   function positionIndexes (bytes32 positionHash)
@@ -34,20 +29,27 @@ interface IRangeOrderPositionManager {
     external view
     returns (uint128 liquidityBalance);
 
-  /*
-   * Input params for createOrders()
-   *
-   * address[] owners: array of owners for the new orders
-   * uint256[] inputAmounts: array of tokenIn amounts for the new owners
-   * uint256 totalInputAmount: total of inputAmounts, required to be equal to the sum
-   *    of inputAmounts values
-   * address tokenIn: input token for the orders
-   * address tokenOut: output token for the orders
-   * uint24 fee: fee amount for the UniswapV3Pool
-   * int24 tickLower: lower bound for the range orders
-   * int24 tickUpper: upper bound for the range orders
-   */
-  struct CreateOrdersParams {
+  struct IncreaseLiquidityParams {
+    address owner;
+    uint256 inputAmount;
+    address tokenIn;
+    address tokenOut;
+    uint24 fee;
+    int24 tickLower;
+    int24 tickUpper;
+  }
+
+  /// @notice Increases liquidity for a position owner
+  /// @param params owner The owner of the position
+  /// inputAmount Amount of tokenIn provided
+  /// tokenIn Input token for the position
+  /// tokenOut Output token for the position
+  /// fee The fee pool for the position
+  /// tickLower Lower bound for the position
+  /// tickUpper Upper bound for the position
+  function increaseLiquidity(IncreaseLiquidityParams calldata params) external;
+
+  struct IncreaseLiquidityMultiParams {
     address[] owners;
     uint256[] inputAmounts;
     uint256 totalInputAmount;
@@ -58,38 +60,18 @@ interface IRangeOrderPositionManager {
     int24 tickUpper;
   }
 
-  function createOrders(CreateOrdersParams calldata params) external;
+  /// @notice Increases liquidity for multiple position owners
+  /// @param params owners Array of owners
+  /// inputAmounts Array of tokenIn amounts for each owner
+  /// totalInputAmount Total of inputAmounts, required to be equal to the sum of inputAmounts values
+  /// tokenIn Input token for the position
+  /// tokenOut Output token for the position
+  /// fee The fee pool for the position
+  /// tickLower Lower bound for the position
+  /// tickUpper Upper bound for the position
+  function increaseLiquidityMulti(IncreaseLiquidityMultiParams calldata params) external;
 
-  /*
-   * Input params for resolvePosition()
-   *
-   * address tokenIn: input token for the resolvable orders
-   * address tokenOut: output token for the resolvable orders
-   * uint24 fee: fee amount for the UniswapV3Pool
-   * int24 tickLower: lower bound for the resolvable orders
-   * int24 tickUpper: upper bound for the resolvable orders
-   * address recipient: address that will receive the resolve reward
-   */
-  struct ResolvePositionParams {
-    address tokenIn;
-    address tokenOut;
-    uint24 fee;
-    int24 tickLower;
-    int24 tickUpper;
-    address recipient;
-  }
-
-  function resolvePosition(ResolvePositionParams calldata params) external;
-
-  /*
-   * Input params for withdrawOrder()
-   *
-   * uint256 positionIndex: index of the position
-   * address tokenIn: input token for the order
-   * address tokenOut: output token for the order
-   * uint256 liquidity: amount of liquidity to withdraw
-   */
-  struct WithdrawParams {
+  struct DecreaseLiquidityParams {
     uint256 positionIndex;
     address tokenIn;
     address tokenOut;
@@ -100,8 +82,57 @@ interface IRangeOrderPositionManager {
     address recipient;
   }
 
-  function withdrawOrder (WithdrawParams calldata params) external;
+  /// @notice Decreases liquidity
+  /// @param params positionIndex Index of the position
+  /// tokenIn Input token for the position
+  /// tokenOut Output token for the position
+  /// fee The fee pool for the position
+  /// tickLower Lower bound for the position
+  /// tickUpper Upper bound for the position
+  /// liquidity Amount of liquidity to decrease from the position
+  /// recipient The recipient of the collected assets
+  function decreaseLiquidity (DecreaseLiquidityParams calldata params) external;
 
-  // function pullPayment (address token, address payer, uint256 value) external;
+  struct LiquidateParams {
+    address tokenIn;
+    address tokenOut;
+    uint24 fee;
+    int24 tickLower;
+    int24 tickUpper;
+    address recipient;
+  }
+
+  /// @notice Liquidates a range order position that has been crossed
+  /// @dev Burns all pool liquidity for a range order position and collects assets to this contract
+  /// @param params tokenIn Input token for the position
+  /// tokenOut Output token for the position
+  /// fee The fee pool for the position
+  /// tickLower Lower bound for the position
+  /// tickUpper Upper bound for the position
+  /// liquidity Amount of liquidity to decrease from the position
+  /// recipient The recipient of the collected assets
+  function liquidate(LiquidateParams calldata params) external;
+
+  struct ResolveParams {
+    uint256 positionIndex;
+    address tokenIn;
+    address tokenOut;
+    uint24 fee;
+    int24 tickLower;
+    int24 tickUpper;
+    address owner;
+    uint128 liquidity;
+  }
+
+  /// @notice Resolves a range order position that has been liquidated
+  /// @dev Transfers liquidated assets from this contract to the position owner
+  /// @param params positionIndex Index of the position
+  /// tokenIn Input token for the position
+  /// tokenOut Output token for the position
+  /// fee The fee pool for the position
+  /// tickLower Lower bound for the position
+  /// tickUpper Upper bound for the position
+  /// owner The position owner
+  function resolve (ResolveParams calldata params) external;
 
 }

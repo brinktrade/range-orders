@@ -61,15 +61,38 @@ describe('RangeOrderPositionManager', function () {
     this.rangeOrderPositionManager_owner2 = await RangeOrderPositionManager.attach(this.rangeOrderPositionManager.address).connect(this.owner2)
     this.rangeOrderPositionManager_resolver = await RangeOrderPositionManager.attach(this.rangeOrderPositionManager.address).connect(this.resolver)
 
-    this.createOrders = createOrders.bind(this)
-    this.withdrawOrder = withdrawOrder.bind(this)
+    this.increaseLiquidity = increaseLiquidity.bind(this)
+    this.increaseLiquidityMulti = increaseLiquidityMulti.bind(this)
+    this.decreaseLiquidity = decreaseLiquidity.bind(this)
     this.resolveAllOrders = resolveAllOrders.bind(this)
   })
 
-  describe('createOrders()', function () {
+  describe('increaseLiquidity()', function () {
     describe('when given ETH input orders and a valid range', function () {
       beforeEach(async function () {
-        await this.createOrders()
+        await this.increaseLiquidity()
+      })
+
+      it('should add liquidity', async function () {
+        const position = await this.rangeOrderPositionManager.positions(this.positionHash, 0)
+        expect(position.liquidity.gt(0)).to.equal(true)
+      })
+
+      it('should increment owner liquidity', async function () {
+        const position = await this.rangeOrderPositionManager.positions(this.positionHash, 0)
+        const totalLiquidity = position.liquidity
+        const ownerLiquidity = await this.rangeOrderPositionManager.liquidityBalances(this.positionHash, 0, this.owner1.address)
+        expect(ownerLiquidity.toString()).to.equal(totalLiquidity.toString())
+      })
+    })
+
+    testMintPoolLiquidityReverts('increaseLiquidity')
+  })
+
+  describe('increaseLiquidityMulti()', function () {
+    describe('when given ETH input orders and a valid range', function () {
+      beforeEach(async function () {
+        await this.increaseLiquidityMulti()
       })
 
       it('should add liquidity', async function () {
@@ -95,7 +118,7 @@ describe('RangeOrderPositionManager', function () {
 
     describe('when given ERC20 input orders and a valid range', function () {
       beforeEach(async function () {
-        await this.createOrders({
+        await this.increaseLiquidityMulti({
           tokenIn: this.AAA,
           tokenOut: this.weth,
           tickLower: DEFAULT_NEXT_TICK - (DEFAULT_TICK_SPACING * 2),
@@ -109,56 +132,28 @@ describe('RangeOrderPositionManager', function () {
       })
     })
 
-    describe('when given an invalid range size', function () {
-      it('should revert with BAD_RANGE_SIZE', async function () {
-        // set the range to be 2 tick spaces instead of 1
-        await expectRevert(this.createOrders({
-          tickLower: DEFAULT_NEXT_TICK + DEFAULT_TICK_SPACING,
-          tickUpper: DEFAULT_NEXT_TICK + (DEFAULT_TICK_SPACING * 3)
-        }), 'BAD_RANGE_SIZE')
-      })
-    })
-
-    describe('when tokenIn is token0, and range is too low', function () {
-      it('should revert with RANGE_TOO_LOW', async function () {
-        await expectRevert(this.createOrders({
-          tickLower: DEFAULT_NEXT_TICK - DEFAULT_TICK_SPACING,
-          tickUpper: DEFAULT_NEXT_TICK
-        }), 'RANGE_TOO_LOW')
-      })
-    })
-
-    describe('when tokenIn is token1, and range is too high', function () {
-      it('should revert with RANGE_TOO_HIGH', async function () {
-        await expectRevert(this.createOrders({
-          tokenIn: this.AAA,
-          tokenOut: this.weth,
-          tickLower: DEFAULT_NEXT_TICK + DEFAULT_TICK_SPACING,
-          tickUpper: DEFAULT_NEXT_TICK + (DEFAULT_TICK_SPACING * 2)
-        }), 'RANGE_TOO_HIGH')
-      })
-    })
+    testMintPoolLiquidityReverts('increaseLiquidityMulti')
 
     describe('when totalInputAmount does not equal sum of owner input amounts', function () {
       it('should revert with BAD_INPUT_AMOUNT', async function () {
-        await expectRevert(this.createOrders({
+        await expectRevert(this.increaseLiquidityMulti({
           totalInputAmount: BN(4).mul(BN18)
         }), 'BAD_INPUT_AMOUNT')
       })
     })
   })
 
-  describe('withdrawOrder()', function () {
+  describe.only('decreaseLiquidity()', function () {
     describe('before the range has been entered', function () {
       beforeEach(async function () {
-        await this.createOrders()
+        await this.increaseLiquidityMulti()
 
-        await this.withdrawOrder({
+        await this.decreaseLiquidity({
           owner: this.owner1,
           tickLower: this.rangeTickLower,
           tickUpper: this.rangeTickUpper
         })
-        await this.withdrawOrder({
+        await this.decreaseLiquidity({
           owner: this.owner2,
           tickLower: this.rangeTickLower,
           tickUpper: this.rangeTickUpper
@@ -186,7 +181,7 @@ describe('RangeOrderPositionManager', function () {
   describe.skip('resolveOrders()', function () {
     describe('when range has been fully crossed', function () {
       beforeEach(async function () {
-        await this.createOrders()
+        await this.increaseLiquidityMulti()
         await this.tokenToEthSwap(this.signer0, this.AAA, BN(20000000).mul(BN18))
         this.AAAFees = BN('27250535821285555519')
       })
@@ -250,7 +245,7 @@ describe('RangeOrderPositionManager', function () {
 
     describe('when some fees have accrued within the range', function () {
       beforeEach(async function () {
-        await this.createOrders()
+        await this.increaseLiquidityMulti()
         // accrue fees in both tokens by swapping both ways in the range
         for (let i=0; i<5; i++) {
           await this.tokenToEthSwap(this.signer0, this.AAA, BN(2000000).mul(BN18))
@@ -277,7 +272,7 @@ describe('RangeOrderPositionManager', function () {
     describe('when tick is within the position range', function () {
       describe('when tokenIn is token0', function () {
         it('should revert with RANGE_TOO_HIGH', async function () {
-          await this.createOrders()
+          await this.increaseLiquidityMulti()
           // put the tick in the middle of the range
           await this.tokenToEthSwap(this.signer0, this.AAA, BN(7000000).mul(BN18))
           await this.resolveAllOrders()
@@ -286,7 +281,7 @@ describe('RangeOrderPositionManager', function () {
       })
       describe('when tokenIn is token1', function () {
         it('should revert with RANGE_TOO_LOW', async function () {
-          await this.createOrders({
+          await this.increaseLiquidityMulti({
             tokenIn: this.AAA,
             tokenOut: this.weth,
             tickLower: DEFAULT_NEXT_TICK - (DEFAULT_TICK_SPACING * 3),
@@ -302,7 +297,48 @@ describe('RangeOrderPositionManager', function () {
   })
 })
 
-async function createOrders (opts = {}) {
+async function increaseLiquidity (opts = {}) {
+  const { tickLower, tickUpper, tokenIn, tokenOut, inputAmount } = opts
+  this.pool = this.pools.WETH.AAA.MEDIUM
+  this.tickSpacing = await this.pool.tickSpacing()
+  const slot0 = await this.pool.slot0()
+  this.initialTick = slot0.tick
+  const nextTick = nearestUsableTick(this.initialTick, this.tickSpacing)
+  this.rangeTickLower = tickLower || nextTick + this.tickSpacing
+  this.rangeTickUpper = tickUpper || nextTick + (this.tickSpacing * 2)
+  this.owner = this.owner1.address
+  this.inputAmount = inputAmount || BN(3).mul(BN18)
+
+  this.tokenIn = tokenIn || this.weth
+  this.tokenOut = tokenOut || this.AAA
+
+  this.positionHash = soliditySha3(abiCoder.encode(
+    ['address', 'address', 'uint24', 'int24', 'int24'],
+    [this.tokenIn.address, this.tokenOut.address, FeeAmount.MEDIUM, this.rangeTickLower, this.rangeTickUpper]
+  ))
+
+  if (this.tokenIn.address !== this.weth.address) {
+    // mint if not WETH
+    await this.tokenIn.mint(this.signer0.address, this.inputAmount)
+  } else {
+    // deposit if WETH
+    await this.weth.deposit({ value: this.inputAmount })
+  }
+
+  await this.tokenIn.approve(this.rangeOrderPositionManager.address, this.inputAmount)
+
+  this.tx = await this.rangeOrderPositionManager.increaseLiquidity([
+    this.owner,
+    this.inputAmount,
+    this.tokenIn.address,
+    this.tokenOut.address,
+    FeeAmount.MEDIUM,
+    this.rangeTickLower,
+    this.rangeTickUpper
+  ])
+}
+
+async function increaseLiquidityMulti (opts = {}) {
   const { tickLower, tickUpper, tokenIn, tokenOut, totalInputAmount, inputAmounts } = opts
   this.pool = this.pools.WETH.AAA.MEDIUM
   this.tickSpacing = await this.pool.tickSpacing()
@@ -333,7 +369,7 @@ async function createOrders (opts = {}) {
 
   await this.tokenIn.approve(this.rangeOrderPositionManager.address, this.totalInputAmount)
 
-  this.tx = await this.rangeOrderPositionManager.createOrders([
+  this.tx = await this.rangeOrderPositionManager.increaseLiquidityMulti([
     this.owners,
     this.inputAmounts,
     this.totalInputAmount,
@@ -345,12 +381,12 @@ async function createOrders (opts = {}) {
   ])
 }
 
-async function withdrawOrder (opts = {}) {
+async function decreaseLiquidity (opts = {}) {
   const { owner, liquidity, positionIndex, recipient, tickLower, tickUpper, tokenIn, tokenOut } = opts
 
-  if (!tickLower) throw new Error(`withdrawOrder needs tickLower`)
-  if (!tickUpper) throw new Error(`withdrawOrder needs tickUpper`)
-  if (!owner || !owner.address) throw new Error(`withdrawOrder owner should be signer with address`)
+  if (!tickLower) throw new Error(`decreaseLiquidity needs tickLower`)
+  if (!tickUpper) throw new Error(`decreaseLiquidity needs tickUpper`)
+  if (!owner || !owner.address) throw new Error(`decreaseLiquidity owner should be signer with address`)
 
   this.pool = this.pools.WETH.AAA.MEDIUM
   this.tickSpacing = await this.pool.tickSpacing()
@@ -373,7 +409,7 @@ async function withdrawOrder (opts = {}) {
   
   const RangeOrderPositionManager = await ethers.getContractFactory('RangeOrderPositionManager')
   const rangeOrderPositionManager_fromOwner = await RangeOrderPositionManager.attach(this.rangeOrderPositionManager.address).connect(owner)
-  this.tx = await rangeOrderPositionManager_fromOwner.withdrawOrder([
+  this.tx = await rangeOrderPositionManager_fromOwner.decreaseLiquidity([
     this.positionIndex,
     this.tokenIn.address,
     this.tokenOut.address,
@@ -401,8 +437,43 @@ async function resolveAllOrders () {
   ])
 }
 
-function testRangeOrderPositionManagerBalancesCleared (only) {
-  const itFn = only ? it.only : it
+function testMintPoolLiquidityReverts (increaseLiquidityFn, opts = {}) {
+  const { only } = opts
+  const descFn = only ? describe['only'] : describe
+  descFn('when given an invalid range size', function () {
+    it('should revert with BAD_RANGE_SIZE', async function () {
+      // set the range to be 2 tick spaces instead of 1
+      await expectRevert(this[increaseLiquidityFn]({
+        tickLower: DEFAULT_NEXT_TICK + DEFAULT_TICK_SPACING,
+        tickUpper: DEFAULT_NEXT_TICK + (DEFAULT_TICK_SPACING * 3)
+      }), 'BAD_RANGE_SIZE')
+    })
+  })
+
+  descFn('when tokenIn is token0, and range is too low', function () {
+    it('should revert with OUT_OF_RANGE', async function () {
+      await expectRevert(this[increaseLiquidityFn]({
+        tickLower: DEFAULT_NEXT_TICK - DEFAULT_TICK_SPACING,
+        tickUpper: DEFAULT_NEXT_TICK
+      }), 'OUT_OF_RANGE')
+    })
+  })
+
+  descFn('when tokenIn is token1, and range is too high', function () {
+    it('should revert with OUT_OF_RANGE', async function () {
+      await expectRevert(this[increaseLiquidityFn]({
+        tokenIn: this.AAA,
+        tokenOut: this.weth,
+        tickLower: DEFAULT_NEXT_TICK + DEFAULT_TICK_SPACING,
+        tickUpper: DEFAULT_NEXT_TICK + (DEFAULT_TICK_SPACING * 2)
+      }), 'OUT_OF_RANGE')
+    })
+  })
+}
+
+function testRangeOrderPositionManagerBalancesCleared (opts = {}) {
+  const { only } = opts
+  const itFn = only ? it['only'] : it
   itFn('should clear rangeOrderPositionManager token balances', async function () {
     const rangeOrderPositionManagerWETHBal = await this.weth.balanceOf(this.rangeOrderPositionManager.address)
     const rangeOrderPositionManagerAAABal = await this.AAA.balanceOf(this.rangeOrderPositionManager.address)

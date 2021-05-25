@@ -90,19 +90,13 @@ contract RangeOrderPositionManager is IRangeOrderPositionManager, IUniswapV3Mint
     }
   }
 
-  /*
-   * @dev Increases liquidity balances for owners. Can be called by any address
-   *
-   * Requires:
-   *   - tickLower/tickUpper range to be 1 tickSpacing
-   *   - range is either above or below current tick, depending on direction
-   *   - totalInputAmount is equal to the sum of input amounts for each owner
-   *
-   */
-  function createOrders(CreateOrdersParams calldata params)
+  // Increases liquidity for a single owner
+  function increaseLiquidity(IncreaseLiquidityParams calldata params)
     external override
   {
-    require(params.owners.length == params.inputAmounts.length, 'ORDERS_LENGTH_MISMATCH');
+    uint128 liquidity = _mintPoolLiquidity(
+      params.inputAmount, params.tokenIn, params.tokenOut, params.fee, params.tickLower, params.tickUpper
+    );
 
     // get Position from storage
     bytes32 positionHash = keccak256(abi.encode(
@@ -111,38 +105,26 @@ contract RangeOrderPositionManager is IRangeOrderPositionManager, IUniswapV3Mint
     uint256 positionIndex = _positionIndexes[positionHash];
     Position storage position = _positions[positionHash][positionIndex];
 
-    (IUniswapV3Pool pool, PoolAddress.PoolKey memory poolKey) = _pool(params.tokenIn, params.tokenOut, params.fee);
-    ( , int24 tick, , , , , ) = pool.slot0();
-    if (params.tokenIn < params.tokenOut) {
-      // for a token0->token1 order, range must be above the current tick
-      require(tick < params.tickLower, 'RANGE_TOO_LOW');
-    } else {
-      // for a token1->token0 order, range must be below the current tick
-      require(tick >= params.tickUpper, 'RANGE_TOO_HIGH');
-    }
+    _liquidityBalances[positionHash][positionIndex][params.owner] += liquidity;
+    position.liquidity += liquidity;
+  }
 
-    // range must be 1 tick space
-    require(params.tickUpper - params.tickLower == pool.tickSpacing(), 'BAD_RANGE_SIZE');
+  // Increases liquidity for multiple owners
+  function increaseLiquidityMulti(IncreaseLiquidityMultiParams calldata params)
+    external override
+  {
+    require(params.owners.length == params.inputAmounts.length, 'ORDERS_LENGTH_MISMATCH');
 
-    uint128 liquidity;
-    {
-      uint160 sqrtRatioAX96 = TickMath.getSqrtRatioAtTick(params.tickLower);
-      uint160 sqrtRatioBX96 = TickMath.getSqrtRatioAtTick(params.tickUpper);
-      if (params.tokenIn < params.tokenOut) {
-        liquidity = LiquidityAmounts.getLiquidityForAmount0(sqrtRatioAX96, sqrtRatioBX96, params.totalInputAmount);
-      } else {
-        liquidity = LiquidityAmounts.getLiquidityForAmount1(sqrtRatioAX96, sqrtRatioBX96, params.totalInputAmount);
-      }
-    }
-
-    // mint liquidity on the UniswapV3Pool
-    pool.mint(
-        address(this),
-        params.tickLower,
-        params.tickUpper,
-        liquidity,
-        abi.encode(MintCallbackData({poolKey: poolKey, payer: msg.sender}))
+    uint128 liquidity = _mintPoolLiquidity(
+      params.totalInputAmount, params.tokenIn, params.tokenOut, params.fee, params.tickLower, params.tickUpper
     );
+
+    // get Position from storage
+    bytes32 positionHash = keccak256(abi.encode(
+      params.tokenIn, params.tokenOut, params.fee, params.tickLower, params.tickUpper
+    ));
+    uint256 positionIndex = _positionIndexes[positionHash];
+    Position storage position = _positions[positionHash][positionIndex];
 
     // store individual owner liquidity
     uint256 accumInputAmount;
@@ -150,9 +132,7 @@ contract RangeOrderPositionManager is IRangeOrderPositionManager, IUniswapV3Mint
       uint256 ownerInputAmount = params.inputAmounts[i];
       accumInputAmount += ownerInputAmount;
       uint128 ownerLiquidity = uint128(FullMath.mulDiv(
-        ownerInputAmount,
-        liquidity,
-        params.totalInputAmount
+        ownerInputAmount, liquidity, params.totalInputAmount
       ));
       _liquidityBalances[positionHash][positionIndex][params.owners[i]] += ownerLiquidity;
     }
@@ -161,15 +141,8 @@ contract RangeOrderPositionManager is IRangeOrderPositionManager, IUniswapV3Mint
     position.liquidity += liquidity;
   }
 
-  /*
-   * @dev Withdraws liquidity for a position. Can only be called by the liquidity owner.
-   *      owners can withdraw liquidity at any price. If the position range has been
-   *      crossed, the first withdraw will resolve all liquidity in the position
-   *
-   * Requires:
-   *   - owner has enough liquidity balance to withdraw
-   */
-  function withdrawOrder (WithdrawParams calldata params)
+  // Decreases position liquidity for msg.sender
+  function decreaseLiquidity (DecreaseLiquidityParams calldata params)
     external override
   {
     bytes32 positionHash = keccak256(abi.encode(
@@ -178,108 +151,121 @@ contract RangeOrderPositionManager is IRangeOrderPositionManager, IUniswapV3Mint
     uint128 ownerLiquidity = _liquidityBalances[positionHash][params.positionIndex][msg.sender];
     require(params.liquidity <= ownerLiquidity, 'NOT_ENOUGHT_LIQUIDITY');
 
-    Position storage position = _positions[positionHash][params.positionIndex];
-    bool token0In = params.tokenIn < params.tokenOut;
+    (IUniswapV3Pool pool, ) = _pool(params.tokenIn, params.tokenOut, params.fee);
+    require(_positionIsCrossed(
+      pool, params.tokenIn, params.tokenOut, params.tickLower, params.tickUpper
+    ) == false, 'OUT_OF_RANGE');
+
     address recipient = params.recipient == address(0) ? msg.sender : params.recipient;
+    _burnAndCollect(pool, params.tickLower, params.tickUpper, params.liquidity, recipient);
 
-    bool withdrawComplete;
-    if (position.resolved == false) {
-      (IUniswapV3Pool pool, ) = _pool(params.tokenIn, params.tokenOut, params.fee);
-      ( , int24 tick, , , , , ) = pool.slot0();
-      if (
-        (token0In == true && tick >= params.tickUpper) ||
-        (token0In == false && tick < params.tickLower)
-      ) {
-        // if the position is fully crossed to tokenOut, resolve all liquidity.
-        // recipient will receive all tokenOut fees as a reward
-        _resolvePosition(
-          positionHash, pool, token0In, params.tickLower, params.tickUpper, recipient
-        );
-      } else {
-        // if the position is not fully crossed, burn the owner's liquidity and collect
-        _burnAndCollect(pool, params.tickLower, params.tickUpper, params.liquidity, recipient);
-
-        // withdraw has been completed by direct collect from pool
-        withdrawComplete = true;
-      }
-    }
-
-    if (withdrawComplete == false) {
-      // withdraw token held in this contract that is owed to the liquidity owner
-      uint256 tokenOutOwed;
-      uint160 sqrtRatioAX96 = TickMath.getSqrtRatioAtTick(params.tickLower);
-      uint160 sqrtRatioBX96 = TickMath.getSqrtRatioAtTick(params.tickUpper);
-      if (token0In == true) {
-        tokenOutOwed = LiquidityAmounts.getAmount1ForLiquidity(sqrtRatioAX96, sqrtRatioBX96, params.liquidity);
-      } else {
-        tokenOutOwed = LiquidityAmounts.getAmount0ForLiquidity(sqrtRatioAX96, sqrtRatioBX96, params.liquidity);
-      }
-      TransferHelper.safeTransfer(params.tokenOut, recipient, tokenOutOwed);
-    }
-
-    position.liquidity -= params.liquidity;
+    _positions[positionHash][params.positionIndex].liquidity -= params.liquidity;
     _liquidityBalances[positionHash][params.positionIndex][msg.sender] -= params.liquidity;
   }
 
-  /*
-   * @dev Resolves a position by burning liquidity on UniswapV3Pool and collecting tokens to this contract
-   *
-   * Requires:
-   *   - range is "resolvable", meaning it is below or above current tick, depending on direction. Current
-   *     tick must "cross" the positon range's outer tick bound
-   */
-  function resolvePosition(ResolvePositionParams calldata params)
+  // Burns pool liquidity for position and collects to this contract
+  function liquidate(LiquidateParams calldata params)
     external override
   {
     bytes32 positionHash = keccak256(abi.encode(
       params.tokenIn, params.tokenOut, params.fee, params.tickLower, params.tickUpper
     ));
-
     Position storage position = _positions[positionHash][_positionIndexes[positionHash]];
-    require(position.resolved == false, 'POSITION_ALREADY_RESOLVED');
-
-    bool token0In = params.tokenIn < params.tokenOut;
+    require(position.liquidated == false, 'LIQUIDATED');
 
     (IUniswapV3Pool pool, ) = _pool(params.tokenIn, params.tokenOut, params.fee);
-    ( , int24 tick, , , , , ) = pool.slot0();
-    if (token0In) {
-      // for a token0->token1 order, range must be below the current tick
-      require(tick >= params.tickUpper, 'RANGE_TOO_HIGH');
-    } else {
-      // for a token1->token0 order, range must be above the current tick
-      require(tick < params.tickLower, 'RANGE_TOO_LOW');
-    }
+    require(_positionIsCrossed(
+      pool, params.tokenIn, params.tokenOut, params.tickLower, params.tickUpper
+    ) == true, 'OUT_OF_RANGE');
 
-    address recipient = params.recipient == address(0) ? msg.sender : params.recipient;
-
-    _resolvePosition(positionHash, pool, token0In, params.tickLower, params.tickUpper, recipient);
-  }
-
-  // removes liquidity and fees for this position from UniswapV3Pool and collects to this contract.
-  // collects and transfers all tokenOut fees to recipient.
-  function _resolvePosition (
-    bytes32 positionHash,
-    IUniswapV3Pool pool,
-    bool token0In,
-    int24 tickLower,
-    int24 tickUpper,
-    address recipient
-  )
-    internal
-  {
-    // position at positionHash and current positionIndex
-    Position storage position = _positions[positionHash][_positionIndexes[positionHash]];
-
-    // burn all liquidity for this position on UniswapV3Pool, collect the tokens from the burn to this contract
-    _burnAndCollect(pool, tickLower, tickUpper, position.liquidity, address(this));
+    _burnAndCollect(pool, params.tickLower, params.tickUpper, position.liquidity, address(this));
 
     // the remaining tokenOut are accrued fees, collect to the recipient
     pool.collect(
-      recipient, tickLower, tickUpper, token0In ? 0 : type(uint128).max, token0In ? type(uint128).max : 0
+      params.recipient == address(0) ? msg.sender : params.recipient,
+      params.tickLower, params.tickUpper,
+      params.tokenIn < params.tokenOut ? 0 : type(uint128).max,
+      params.tokenIn < params.tokenOut ? type(uint128).max : 0
     );
 
-    position.resolved = true;
+    position.liquidated = true;
     _positionIndexes[positionHash]++;
+  }
+
+  // Transfers liquidated tokenOut to position owner
+  function resolve (ResolveParams calldata params)
+    external override
+  {
+    bytes32 positionHash = keccak256(abi.encode(
+      params.tokenIn, params.tokenOut, params.fee, params.tickLower, params.tickUpper
+    ));
+    Position storage position = _positions[positionHash][params.positionIndex];
+    require(position.liquidated == true, 'NOT_LIQUIDATED');
+
+    uint128 ownerLiquidity = _liquidityBalances[positionHash][params.positionIndex][params.owner];
+    require(ownerLiquidity > 0, 'NO_LIQUIDITY');
+
+    uint256 tokenOutOwed;
+    uint160 sqrtRatioAX96 = TickMath.getSqrtRatioAtTick(params.tickLower);
+    uint160 sqrtRatioBX96 = TickMath.getSqrtRatioAtTick(params.tickUpper);
+    if (params.tokenIn < params.tokenOut) {
+      tokenOutOwed = LiquidityAmounts.getAmount1ForLiquidity(sqrtRatioAX96, sqrtRatioBX96, ownerLiquidity);
+    } else {
+      tokenOutOwed = LiquidityAmounts.getAmount0ForLiquidity(sqrtRatioAX96, sqrtRatioBX96, ownerLiquidity);
+    }
+    TransferHelper.safeTransfer(params.tokenOut, params.owner, tokenOutOwed);
+
+    position.liquidity -= ownerLiquidity;
+    _liquidityBalances[positionHash][params.positionIndex][params.owner] -= ownerLiquidity;
+  }
+
+  // internal functions
+
+  function _positionIsCrossed (IUniswapV3Pool pool, address tokenIn, address tokenOut, int24 tickLower, int24 tickUpper)
+    internal view
+    returns (bool)
+  {
+    ( , int24 tick, , , , , ) = pool.slot0();
+    if (tokenIn < tokenOut) {
+      // for a token0->token1 order, return true if current tick is above range
+      return tick >= tickUpper;
+    } else {
+      // for a token1->token0 order, return true if current tick is below range
+      return tick < tickLower;
+    }
+  }
+
+  function _mintPoolLiquidity (
+    uint256 inputAmount, address tokenIn, address tokenOut, uint24 fee, int24 tickLower, int24 tickUpper
+  )
+    internal
+    returns (uint128 liquidity)
+  {
+    (IUniswapV3Pool pool, PoolAddress.PoolKey memory poolKey) = _pool(tokenIn, tokenOut, fee);
+
+    // TODO: this should revert if the range is entered or crossed, right now it just reverts if it's
+    // crossed
+    require(_positionIsCrossed(pool, tokenIn, tokenOut, tickLower, tickUpper) == false, 'OUT_OF_RANGE');
+
+    // range must be 1 tick space
+    require(tickUpper - tickLower == pool.tickSpacing(), 'BAD_RANGE_SIZE');
+
+    uint160 sqrtRatioAX96 = TickMath.getSqrtRatioAtTick(tickLower);
+    uint160 sqrtRatioBX96 = TickMath.getSqrtRatioAtTick(tickUpper);
+    if (tokenIn < tokenOut) {
+      liquidity = LiquidityAmounts.getLiquidityForAmount0(sqrtRatioAX96, sqrtRatioBX96, inputAmount);
+    } else {
+      liquidity = LiquidityAmounts.getLiquidityForAmount1(sqrtRatioAX96, sqrtRatioBX96, inputAmount);
+    }
+
+    // mint liquidity on the UniswapV3Pool
+    pool.mint(
+        address(this),
+        tickLower,
+        tickUpper,
+        liquidity,
+        abi.encode(MintCallbackData({poolKey: poolKey, payer: msg.sender}))
+    );
   }
 
   function _burnAndCollect (
