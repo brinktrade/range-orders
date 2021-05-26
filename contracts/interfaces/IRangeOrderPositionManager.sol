@@ -121,7 +121,6 @@ interface IRangeOrderPositionManager {
     int24 tickLower;
     int24 tickUpper;
     address owner;
-    uint128 liquidity;
   }
 
   /// @notice Resolves a range order position that has been liquidated

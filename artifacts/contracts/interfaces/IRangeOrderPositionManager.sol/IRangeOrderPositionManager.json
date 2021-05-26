@@ -343,11 +343,6 @@
               "internalType": "address",
               "name": "owner",
               "type": "address"
-            },
-            {
-              "internalType": "uint128",
-              "name": "liquidity",
-              "type": "uint128"
             }
           ],
           "internalType": "struct IRangeOrderPositionManager.ResolveParams",
